@@ -1,4 +1,4 @@
-package example
+package kea
 
 import (
 	"github.com/coredns/caddy"
@@ -7,22 +7,85 @@ import (
 )
 
 // init registers this plugin.
-func init() { plugin.Register("example", setup) }
+func init() { plugin.Register("kea", setup) }
 
-// setup is the function that gets called when the config parser see the token "example". Setup is responsible
-// for parsing any extra options the example plugin may have. The first token this function sees is "example".
 func setup(c *caddy.Controller) error {
-	c.Next() // Ignore "example" and give us the next token.
-	if c.NextArg() {
-		// If there was another token, return an error, because we don't have any configuration.
-		// Any errors returned from this setup function should be wrapped with plugin.Error, so we
-		// can present a slightly nicer error message to the user.
-		return plugin.Error("example", c.ArgErr())
+
+	controlAgent := ""
+	networks := []string{}
+	insecure := ""
+	extractHostname := ""
+	useLeases := ""
+	useReservations := ""
+
+	c.Next()
+	if c.NextBlock() {
+		for {
+			switch c.Val() {
+			case "control_agent":
+				if !c.NextArg() {
+					return plugin.Error("kea", c.ArgErr())
+				}
+				controlAgent = c.Val()
+				break
+			case "networks":
+				for c.NextArg() {
+					networks = append(networks, c.Val())
+				}
+				if len(networks) == 0 {
+					return plugin.Error("kea", c.ArgErr())
+				}
+				break
+			case "insecure":
+				if !c.NextArg() {
+					return plugin.Error("kea", c.ArgErr())
+				}
+				insecure = c.Val()
+				break
+			case "extract_hostname":
+				if !c.NextArg() {
+					return plugin.Error("kea", c.ArgErr())
+				}
+				extractHostname = c.Val()
+				break
+			case "use_leases":
+				if !c.NextArg() {
+					return plugin.Error("kea", c.ArgErr())
+				}
+				useLeases = c.Val()
+				break
+			case "use_reservations":
+				if !c.NextArg() {
+					return plugin.Error("kea", c.ArgErr())
+				}
+				useReservations = c.Val()
+				break
+			default:
+				if c.Val() != "}" {
+					return plugin.Error("kea", c.Err("unknown property"))
+				}
+			}
+			if !c.Next() {
+				break
+			}
+		}
+	}
+
+	if controlAgent == "" {
+		return plugin.Error("kea", c.ArgErr())
 	}
 
 	// Add the Plugin to CoreDNS, so Servers can use it in their plugin chain.
 	dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {
-		return Example{Next: next}
+		return Kea{
+			ControlAgent:    controlAgent,
+			Networks:        networks,
+			Insecure:        insecure,
+			ExtractHostname: extractHostname,
+			UseLeases:       useLeases,
+			UseReservations: useReservations,
+			Next:            next,
+		}
 	})
 
 	// All OK, return a nil error.
