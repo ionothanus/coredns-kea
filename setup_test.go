@@ -9,13 +9,124 @@ import (
 // TestSetup tests the various things that should be parsed by setup.
 // Make sure you also test for parse errors.
 func TestSetup(t *testing.T) {
-	c := caddy.NewTestController("dns", `kea`)
-	if err := setup(c); err != nil {
-		t.Fatalf("Expected no errors, but got: %v", err)
+	tests := []struct {
+		inputFileRules string
+		shouldErr      bool
+		//expectedInterfaces string
+	}{
+		{
+			`kea {
+				control_agent "https://kea.example.com:8000"
+			}`,
+			false,
+		},
+		{
+			`kea {
+				control_agent "https://kea.example.com:8000"
+				insecure true
+			}`,
+			false,
+		},
+		{
+			`kea {
+				control_agent "https://kea.example.com:8000"
+				insecure false
+			}`,
+			false,
+		},
+		{
+			`kea {
+				control_agent "https://kea.example.com:8000"
+				use_leases false
+			}`,
+			false,
+		},
+		{
+			`kea {
+				control_agent "https://kea.example.com:8000"
+				use_leases true
+			}`,
+			false,
+		},
+		{
+			`kea {
+				control_agent "https://kea.example.com:8000"
+				use_reservations false
+			}`,
+			false,
+		},
+		{
+			`kea {
+				control_agent "https://kea.example.com:8000"
+				use_reservations true
+			}`,
+			false,
+		},
+		{
+			`kea {
+				control_agent "https://kea.example.com:8000"
+				extract_hostname true
+			}`,
+			false,
+		},
+		{
+			`kea {
+				control_agent "https://kea.example.com:8000"
+				extract_hostname true
+			}`,
+			false,
+		},
+		{
+			`kea {
+				control_agent "https://kea.example.com:8000"
+				use_reservations
+			}`,
+			true,
+		},
+		{
+			`kea {
+				control_agent "https://kea.example.com:8000"
+				insecure true
+				networks 10.10.22.0/24
+			}`,
+			false,
+		},
+		{
+			`kea {
+				control_agent "https://kea.example.com:8000"
+				insecure false
+				networks 10.10.22.0/24
+			}`,
+			false,
+		},
+		{
+			`kea {
+				control_agent "https://kea.example.com:8000"
+				networks
+			}`,
+			true,
+		},
+		{
+			`kea {
+			}`,
+			true,
+		},
+		{
+			`kea {
+				control_agent
+			}`,
+			true,
+		},
 	}
 
-	c = caddy.NewTestController("dns", `kea more`)
-	if err := setup(c); err == nil {
-		t.Fatalf("Expected errors, but got: %v", err)
+	for i, test := range tests {
+		c := caddy.NewTestController("dns", test.inputFileRules)
+		err := setup(c)
+
+		if err == nil && test.shouldErr {
+			t.Fatalf("Test %d expected errors, but got no error", i)
+		} else if err != nil && !test.shouldErr {
+			t.Fatalf("Test %d expected no errors, but got '%v'", i, err)
+		}
 	}
 }

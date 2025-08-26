@@ -84,7 +84,7 @@ func (k Kea) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (in
 	ips, err := k.GetIPsForHostname(nameLookup)
 
 	if err != nil {
-		return plugin.NextOrFailure(p.Name(), p.Next, ctx, w, r)
+		return plugin.NextOrFailure(k.Name(), k.Next, ctx, w, r)
 	}
 
 	found := false
@@ -116,7 +116,7 @@ func (k Kea) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (in
 	}
 
 	if !found {
-		return plugin.NextOrFailure(p.Name(), p.Next, ctx, w, r)
+		return plugin.NextOrFailure(k.Name(), k.Next, ctx, w, r)
 	}
 	err = w.WriteMsg(m)
 	return 0, err
