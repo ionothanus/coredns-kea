@@ -29,7 +29,6 @@ func setup(c *caddy.Controller) error {
 					return plugin.Error("kea", c.ArgErr())
 				}
 				controlAgent = c.Val()
-				break
 			case "networks":
 				for c.NextArg() {
 					networks = append(networks, c.Val())
@@ -37,43 +36,36 @@ func setup(c *caddy.Controller) error {
 				if len(networks) == 0 {
 					return plugin.Error("kea", c.ArgErr())
 				}
-				break
 			case "insecure":
 				if !c.NextArg() {
 					return plugin.Error("kea", c.ArgErr())
 				}
 				insecure = c.Val()
-				break
 			case "extract_hostname":
 				if !c.NextArg() {
 					return plugin.Error("kea", c.ArgErr())
 				}
 				extractHostname = c.Val()
-				break
 			case "use_leases":
 				if !c.NextArg() {
 					return plugin.Error("kea", c.ArgErr())
 				}
 				useLeases = c.Val()
-				break
 			case "use_reservations":
 				if !c.NextArg() {
 					return plugin.Error("kea", c.ArgErr())
 				}
 				useReservations = c.Val()
-				break
 			case "use_ipv4":
 				if !c.NextArg() {
 					return plugin.Error("kea", c.ArgErr())
 				}
 				useIPv4 = c.Val()
-				break
 			case "use_ipv6":
 				if !c.NextArg() {
 					return plugin.Error("kea", c.ArgErr())
 				}
 				useIPv6 = c.Val()
-				break
 			default:
 				if c.Val() != "}" {
 					return plugin.Error("kea", c.Err("unknown property"))
