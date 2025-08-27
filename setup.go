@@ -13,10 +13,10 @@ func setup(c *caddy.Controller) error {
 
 	controlAgent := ""
 	networks := []string{}
-	insecure := ""
-	extractHostname := ""
-	useLeases := ""
-	useReservations := ""
+	insecure := "true"
+	extractHostname := "false"
+	useLeases := "true"
+	useReservations := "true"
 	useIPv4 := "true"
 	useIPv6 := "true"
 
@@ -87,6 +87,10 @@ func setup(c *caddy.Controller) error {
 
 	if controlAgent == "" {
 		return plugin.Error("kea", c.ArgErr())
+	}
+
+	if useLeases != "true" && useReservations != "true" {
+		return plugin.Error("kea", c.Err("use_leases and use_reservations cannot both be false"))
 	}
 
 	if useIPv4 != "true" && useIPv6 != "true" {

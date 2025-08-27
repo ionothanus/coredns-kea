@@ -2,12 +2,17 @@
 
 ## Name
 
-*example* - prints "example" after a query is handled.
+*kea* - supports Kea lease hostname lookups
 
 ## Description
 
-The example plugin prints "example" on every query that got handled by the server. It serves as
-documentation for writing CoreDNS plugins.
+This plugin will contact a Kea Control Agent to request IP addresses for a given hostname.
+It supports lease and reservation lookups, for IPv4 and IPv6 DHCP servers.
+
+### Note
+Prior to Kea 3.0, the Control Agent hooks enabling reservation lookup were sold separately and not included in the open-source package. This plugin implements reservation lookup based on the documentation but *reservation support has not been tested*.
+
+As of Kea 3.0, the Control Agent is deprecated; this plugin should still work, but it has only been tested against Kea 2.6.
 
 ## Compilation
 
@@ -18,12 +23,10 @@ The [manual](https://coredns.io/manual/toc/#what-is-coredns) will have more info
 A simple way to consume this plugin, is by adding the following on [plugin.cfg](https://github.com/coredns/coredns/blob/master/plugin.cfg), and recompile it as [detailed on coredns.io](https://coredns.io/2017/07/25/compile-time-enabling-or-disabling-plugins/#build-with-compile-time-configuration-file).
 
 ~~~
-example:github.com/coredns/example
+kea:github.com/ionothanus/coredns-kea
 ~~~
 
-Put this early in the plugin list, so that *example* is executed before any of the other plugins.
-
-After this you can compile coredns by:
+You can compile coredns by:
 
 ``` sh
 go generate
@@ -39,41 +42,46 @@ make
 ## Syntax
 
 ~~~ txt
-example
+kea {
+  control_agent "http://localhost:8000"
+
+  # Filter IP responses to include only ones in the specified CIDRs.
+  # If unspecified, filtering will be disabled.
+	networks := "10.0.0.0/16 10.10.0.0/16"
+
+  # Set to "false" if you have an HTTPS proxy for your control agent
+  # and you want to enforce a secure connection. "true" by default.
+	insecure := "false"
+  
+  # Use extract_hostname to send only the hostname of a domain name query to Kea.
+  # For example, if the request will look up test.example.com, "true" here
+  # would send "test" as the hostname to Kea. "false" by default.
+	extract_hostname := "true"
+
+  # You can disable one or the other, but at least one
+  # of lease and reservation lookups must be enabled.
+  # Both are enabled by default.
+	use_leases := ""
+	use_reservations := ""
+
+  # You can disable one or the other, but at least one of IPv4 and IPv6 support must be enabled.
+  # Both are enabled by default.
+	use_ipv4 := "true"
+	use_ipv6 := "true"
+}
 ~~~
 
 ## Metrics
 
 If monitoring is enabled (via the *prometheus* directive) the following metric is exported:
 
-* `coredns_example_request_count_total{server}` - query count to the *example* plugin.
+* `coredns_kea_request_count_total{server}` - query count to the *kea* plugin.
 
 The `server` label indicated which server handled the request, see the *metrics* plugin for details.
 
 ## Ready
 
 This plugin reports readiness to the ready plugin. It will be immediately ready.
-
-## Examples
-
-In this configuration, we forward all queries to 9.9.9.9 and print "example" whenever we receive
-a query.
-
-~~~ corefile
-. {
-  forward . 9.9.9.9
-  example
-}
-~~~
-
-Or without any external connectivity:
-
-~~~ corefile
-. {
-  whoami
-  example
-}
-~~~
 
 ## Also See
 
