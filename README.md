@@ -43,31 +43,31 @@ make
 
 ~~~ txt
 kea {
-  control_agent "http://localhost:8000"
+  control_agent http://localhost:8000
 
   # Filter IP responses to include only ones in the specified CIDRs.
   # If unspecified, filtering will be disabled.
-	networks := "10.0.0.0/16 10.10.0.0/16"
+	networks 10.0.0.0/16 10.10.0.0/16
 
   # Set to "false" if you have an HTTPS proxy for your control agent
   # and you want to enforce a secure connection. "true" by default.
-	insecure := "false"
+	insecure false
   
   # Use extract_hostname to send only the hostname of a domain name query to Kea.
   # For example, if the request will look up test.example.com, "true" here
   # would send "test" as the hostname to Kea. "false" by default.
-	extract_hostname := "true"
+	extract_hostname true
 
   # You can disable one or the other, but at least one
   # of lease and reservation lookups must be enabled.
   # Both are enabled by default.
-	use_leases := ""
-	use_reservations := ""
+	use_leases true
+	use_reservations false
 
   # You can disable one or the other, but at least one of IPv4 and IPv6 support must be enabled.
   # Both are enabled by default.
-	use_ipv4 := "true"
-	use_ipv6 := "true"
+	use_ipv4 true
+	use_ipv6 true
 }
 ~~~
 
