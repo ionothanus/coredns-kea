@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -20,14 +21,16 @@ import (
 
 var log = clog.NewWithPlugin("kea")
 
+const KEA_IPV4_SERVICE_NAME = "dhcp4"
+const KEA_IPV6_SERVICE_NAME = "dhcp6"
+
 const KEA_LIST_LEASES_BY_HOSTNAME_TEMPLATE = `{
   "command": "lease4-get-by-hostname",
   "arguments": {
     "hostname": "%s"
   },
   "service": [
-    "dhcp4",
-	"dhcp6"
+    %s
   ]
 }`
 const KEA_LIST_RESERVATIONS_BY_HOSTNAME_TEMPLATE = `{
@@ -36,8 +39,7 @@ const KEA_LIST_RESERVATIONS_BY_HOSTNAME_TEMPLATE = `{
     "hostname": "%s"
   },
   "service": [
-    "dhcp4",
-	"dhcp6"
+    %s
   ]
 }`
 
@@ -49,6 +51,8 @@ type Kea struct {
 	UseReservations string
 	Insecure        string
 	Next            plugin.Handler
+	UseIPv4         string
+	UseIPv6         string
 }
 
 func (k Kea) httpClient() *http.Client {
@@ -61,8 +65,6 @@ func (k Kea) httpClient() *http.Client {
 	return &http.Client{}
 }
 
-// ServeDNS implements the plugin.Handler interface. This method gets called when example is used
-// in a Server.
 func (k Kea) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
 	state := request.Request{W: w, Req: r}
 
@@ -124,15 +126,27 @@ func (k Kea) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (in
 
 func (k Kea) Name() string { return "kea" }
 
+func (k Kea) serviceNames() string {
+	services := []string{}
+	if k.UseIPv4 == "true" {
+		services = append(services, fmt.Sprintf(`"%s"`, KEA_IPV4_SERVICE_NAME))
+	}
+	if k.UseIPv6 == "true" {
+		services = append(services, fmt.Sprintf(`"%s"`, KEA_IPV6_SERVICE_NAME))
+	}
+	return strings.Join(services, ", ")
+}
+
 func (k Kea) MakeControlAgentRequest(requestBody string) (responseBody []byte, err error) {
 	requestBodyBytes := bytes.NewBufferString(requestBody)
 
-	req, err := http.NewRequest(http.MethodPost, k.ControlAgent, requestBodyBytes)
-	resp, err := k.httpClient().Do(req)
+	resp, err := k.httpClient().Post(k.ControlAgent, "application/json", requestBodyBytes)
+
 	if err != nil {
 		return
 	}
 	if resp.StatusCode != 200 {
+		err = errors.New(resp.Status)
 		return
 	}
 	body, err := io.ReadAll(resp.Body)
@@ -144,7 +158,14 @@ func (k Kea) MakeControlAgentRequest(requestBody string) (responseBody []byte, e
 }
 
 func (k Kea) GetIPsForLease(deviceName string) (ips []net.IP, err error) {
-	responseBody, err := k.MakeControlAgentRequest(fmt.Sprintf(KEA_LIST_LEASES_BY_HOSTNAME_TEMPLATE, deviceName))
+	responseBody, err := k.MakeControlAgentRequest(
+		fmt.Sprintf(KEA_LIST_LEASES_BY_HOSTNAME_TEMPLATE,
+			deviceName,
+			k.serviceNames()))
+	if err != nil {
+		return
+	}
+
 	var leaseRecords KeaLeaseRecords
 	err = json.Unmarshal(responseBody, &leaseRecords)
 	if err != nil {
@@ -162,31 +183,46 @@ func (k Kea) GetIPsForLease(deviceName string) (ips []net.IP, err error) {
 					*ipResult = append(*ipResult, ip)
 				}
 			}
+		case Error:
+			log.Warning("Kea error: " + leaseRecord.Text)
 		}
 	}
 
-	ips, err = FilterIPsInCIDRs(ips, k.Networks)
-	if err != nil {
-		return nil, err
+	if len(k.Networks) > 0 {
+		ips, err = FilterIPsInCIDRs(*ipResult, k.Networks)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		ips = *ipResult
 	}
 
 	return
 }
 
 func (k Kea) GetIPsForReservation(deviceName string) (ips []net.IP, err error) {
-	responseBody, err := k.MakeControlAgentRequest(fmt.Sprintf(KEA_LIST_RESERVATIONS_BY_HOSTNAME_TEMPLATE, deviceName))
-	var leaseRecords KeaReservationRecords
-	err = json.Unmarshal(responseBody, &leaseRecords)
+	responseBody, err := k.MakeControlAgentRequest(
+		fmt.Sprintf(
+			KEA_LIST_RESERVATIONS_BY_HOSTNAME_TEMPLATE,
+			deviceName,
+			k.serviceNames()))
+
+	if err != nil {
+		return
+	}
+
+	var reservationRecords KeaReservationRecords
+	err = json.Unmarshal(responseBody, &reservationRecords)
 	if err != nil {
 		return
 	}
 
 	ipResult := new([]net.IP)
 
-	for _, leaseRecord := range leaseRecords {
-		switch leaseRecord.Result {
+	for _, reservationRecord := range reservationRecords {
+		switch reservationRecord.Result {
 		case Success:
-			for _, lease := range leaseRecord.Arguments.Leases {
+			for _, lease := range reservationRecord.Arguments.Leases {
 				ip := net.ParseIP(lease.IPAddress)
 				if !ip.IsLoopback() {
 					*ipResult = append(*ipResult, ip)
@@ -200,6 +236,8 @@ func (k Kea) GetIPsForReservation(deviceName string) (ips []net.IP, err error) {
 				}
 
 			}
+		case Error:
+			log.Warning("Kea reservation error: " + reservationRecord.Text)
 		}
 	}
 
@@ -217,7 +255,7 @@ func (k Kea) GetIPsForHostname(deviceName string) (ips []net.IP, err error) {
 		if err != nil {
 			return nil, err
 		}
-		if len(ips) > 0 {
+		if len(leases) > 0 {
 			ips = append(ips, leases...)
 		}
 	}
@@ -227,7 +265,7 @@ func (k Kea) GetIPsForHostname(deviceName string) (ips []net.IP, err error) {
 		if err != nil {
 			return nil, err
 		}
-		if len(ips) > 0 {
+		if len(reservations) > 0 {
 			ips = append(ips, reservations...)
 		}
 	}
@@ -246,10 +284,8 @@ func FilterIPsInCIDRs(ips []net.IP, cidrs []string) (filteredIps []net.IP, err e
 	}
 
 	for _, ip := range ips {
-		var filtered []net.IP
-
 		if ipInAnyNetwork(ip, networks) {
-			filtered = append(filtered, ip)
+			filteredIps = append(filteredIps, ip)
 		}
 	}
 
@@ -263,22 +299,6 @@ func ipInAnyNetwork(ip net.IP, networks []*net.IPNet) bool {
 		}
 	}
 	return false
-}
-
-// ResponsePrinter wrap a dns.ResponseWriter and will write example to standard output when WriteMsg is called.
-type ResponsePrinter struct {
-	dns.ResponseWriter
-}
-
-// NewResponsePrinter returns ResponseWriter.
-func NewResponsePrinter(w dns.ResponseWriter) *ResponsePrinter {
-	return &ResponsePrinter{ResponseWriter: w}
-}
-
-// WriteMsg calls the underlying ResponseWriter's WriteMsg method and prints "example" to standard output.
-func (r *ResponsePrinter) WriteMsg(res *dns.Msg) error {
-	log.Info("example")
-	return r.ResponseWriter.WriteMsg(res)
 }
 
 type KeaResultCode int

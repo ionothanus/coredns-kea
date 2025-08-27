@@ -17,6 +17,8 @@ func setup(c *caddy.Controller) error {
 	extractHostname := ""
 	useLeases := ""
 	useReservations := ""
+	useIPv4 := "true"
+	useIPv6 := "true"
 
 	c.Next()
 	if c.NextBlock() {
@@ -60,6 +62,18 @@ func setup(c *caddy.Controller) error {
 				}
 				useReservations = c.Val()
 				break
+			case "use_ipv4":
+				if !c.NextArg() {
+					return plugin.Error("kea", c.ArgErr())
+				}
+				useIPv4 = c.Val()
+				break
+			case "use_ipv6":
+				if !c.NextArg() {
+					return plugin.Error("kea", c.ArgErr())
+				}
+				useIPv6 = c.Val()
+				break
 			default:
 				if c.Val() != "}" {
 					return plugin.Error("kea", c.Err("unknown property"))
@@ -75,6 +89,10 @@ func setup(c *caddy.Controller) error {
 		return plugin.Error("kea", c.ArgErr())
 	}
 
+	if useIPv4 != "true" && useIPv6 != "true" {
+		return plugin.Error("kea", c.Err("use_ipv4 and use_ipv6 cannot both be false"))
+	}
+
 	// Add the Plugin to CoreDNS, so Servers can use it in their plugin chain.
 	dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {
 		return Kea{
@@ -85,6 +103,8 @@ func setup(c *caddy.Controller) error {
 			UseLeases:       useLeases,
 			UseReservations: useReservations,
 			Next:            next,
+			UseIPv4:         useIPv4,
+			UseIPv6:         useIPv6,
 		}
 	})
 

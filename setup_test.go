@@ -102,6 +102,20 @@ func TestSetup(t *testing.T) {
 		{
 			`kea {
 				control_agent "https://kea.example.com:8000"
+				use_ipv4 false
+			}`,
+			false,
+		},
+		{
+			`kea {
+				control_agent "https://kea.example.com:8000"
+				use_ipv6 false
+			}`,
+			false,
+		},
+		{
+			`kea {
+				control_agent "https://kea.example.com:8000"
 				networks
 			}`,
 			true,
@@ -114,6 +128,14 @@ func TestSetup(t *testing.T) {
 		{
 			`kea {
 				control_agent
+			}`,
+			true,
+		},
+		{
+			`kea {
+				control_agent "https://kea.example.com:8000"
+				use_ipv4 false
+				use_ipv6 false
 			}`,
 			true,
 		},
