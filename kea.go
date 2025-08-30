@@ -10,6 +10,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/coredns/coredns/plugin"
@@ -44,15 +45,19 @@ const KEA_LIST_RESERVATIONS_BY_HOSTNAME_TEMPLATE = `{
 }`
 
 type Kea struct {
-	ControlAgent    string
-	Networks        []string
-	ExtractHostname string
-	UseLeases       string
-	UseReservations string
-	Insecure        string
-	Next            plugin.Handler
-	UseIPv4         string
-	UseIPv6         string
+	ControlAgent             string
+	Networks                 []string
+	ExtractHostname          string
+	ControlAgentLeases       string
+	ControlAgentReservations string
+	Insecure                 string
+	Next                     plugin.Handler
+	UseIPv4                  string
+	UseIPv6                  string
+	DHCP4ConfPath            string
+	DHCP6ConfPath            string
+	DHCP4Conf                KeaDHCP4Conf
+	DHCP6Conf                KeaDHCP6Conf
 }
 
 func (k Kea) httpClient() *http.Client {
@@ -157,7 +162,7 @@ func (k Kea) MakeControlAgentRequest(requestBody string) (responseBody []byte, e
 	return body, nil
 }
 
-func (k Kea) GetIPsForLease(deviceName string) (ips []net.IP, err error) {
+func (k Kea) ControlAgentGetIPsForLease(deviceName string) (ips []net.IP, err error) {
 	responseBody, err := k.MakeControlAgentRequest(
 		fmt.Sprintf(KEA_LIST_LEASES_BY_HOSTNAME_TEMPLATE,
 			deviceName,
@@ -200,7 +205,7 @@ func (k Kea) GetIPsForLease(deviceName string) (ips []net.IP, err error) {
 	return
 }
 
-func (k Kea) GetIPsForReservation(deviceName string) (ips []net.IP, err error) {
+func (k Kea) ControlAgentGetIPsForReservation(deviceName string) (ips []net.IP, err error) {
 	responseBody, err := k.MakeControlAgentRequest(
 		fmt.Sprintf(
 			KEA_LIST_RESERVATIONS_BY_HOSTNAME_TEMPLATE,
@@ -250,8 +255,8 @@ func (k Kea) GetIPsForReservation(deviceName string) (ips []net.IP, err error) {
 }
 
 func (k Kea) GetIPsForHostname(deviceName string) (ips []net.IP, err error) {
-	if k.UseLeases == "true" {
-		leases, err := k.GetIPsForLease(deviceName)
+	if k.ControlAgentLeases == "true" {
+		leases, err := k.ControlAgentGetIPsForLease(deviceName)
 		if err != nil {
 			return nil, err
 		}
@@ -260,13 +265,46 @@ func (k Kea) GetIPsForHostname(deviceName string) (ips []net.IP, err error) {
 		}
 	}
 
-	if k.UseReservations == "true" {
-		reservations, err := k.GetIPsForReservation(deviceName)
+	if k.ControlAgentReservations == "true" {
+		reservations, err := k.ControlAgentGetIPsForReservation(deviceName)
 		if err != nil {
 			return nil, err
 		}
 		if len(reservations) > 0 {
 			ips = append(ips, reservations...)
+		}
+	}
+
+	if k.DHCP4ConfPath != "" {
+		for _, subnet := range k.DHCP4Conf.Dhcp4.Subnet4 {
+			if slices.IndexFunc(k.Networks, func(n string) bool { return n == subnet.Subnet }) != -1 || len(k.Networks) == 0 {
+				for _, reservation := range subnet.Reservations {
+					if reservation.Hostname == deviceName {
+						ip := net.ParseIP(reservation.IpAddress)
+						if !ip.IsLoopback() {
+							ips = append(ips, ip)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if k.DHCP6ConfPath != "" {
+		for _, subnet := range k.DHCP6Conf.Dhcp6.Subnet6 {
+			if slices.IndexFunc(k.Networks,
+				func(n string) bool { return n == subnet.Subnet }) != -1 || len(k.Networks) == 0 {
+				for _, reservation := range subnet.Reservations {
+					if reservation.Hostname == deviceName {
+						for _, ipString := range reservation.IpAddresses {
+							ip := net.ParseIP(ipString)
+							if !ip.IsLoopback() {
+								ips = append(ips, ip)
+							}
+						}
+					}
+				}
+			}
 		}
 	}
 
@@ -343,4 +381,30 @@ type KeaReservationRecords []struct {
 	} `json:"arguments,omitempty"`
 	Result KeaResultCode `json:"result"`
 	Text   string        `json:"text"`
+}
+
+type KeaDHCP4Conf struct {
+	Dhcp4 struct {
+		Subnet4 []struct {
+			Subnet       string `json:"subnet"`
+			Reservations []struct {
+				IpAddress string `json:"ip-address"`
+				HwAddress string `json:"hw-address"`
+				Hostname  string `json:"hostname,omitempty"`
+			} `json:"reservations,omitempty"`
+		} `json:"subnet4"`
+	} `json:"Dhcp4"`
+}
+
+type KeaDHCP6Conf struct {
+	Dhcp6 struct {
+		Subnet6 []struct {
+			Subnet       string `json:"subnet"`
+			Reservations []struct {
+				IpAddresses []string `json:"ip-addresses"`
+				HwAddress   string   `json:"hw-address"`
+				Hostname    string   `json:"hostname,omitempty"`
+			} `json:"reservations,omitempty"`
+		} `json:"subnet6"`
+	} `json:"Dhcp6"`
 }

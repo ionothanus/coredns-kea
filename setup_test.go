@@ -22,6 +22,18 @@ func TestSetup(t *testing.T) {
 		},
 		{
 			`kea {
+				dhcp4_conf "./resources/kea-dhcp4.conf"
+			}`,
+			false,
+		},
+		{
+			`kea {
+				dhcp6_conf "./resources/kea-dhcp6.conf"
+			}`,
+			false,
+		},
+		{
+			`kea {
 				control_agent "https://kea.example.com:8000"
 				insecure true
 			}`,
@@ -37,35 +49,28 @@ func TestSetup(t *testing.T) {
 		{
 			`kea {
 				control_agent "https://kea.example.com:8000"
-				use_leases false
+				control_agent_leases false
 			}`,
 			false,
 		},
 		{
 			`kea {
 				control_agent "https://kea.example.com:8000"
-				use_leases true
+				control_agent_leases true
 			}`,
 			false,
 		},
 		{
 			`kea {
 				control_agent "https://kea.example.com:8000"
-				use_reservations false
+				control_agent_reservations false
 			}`,
 			false,
 		},
 		{
 			`kea {
 				control_agent "https://kea.example.com:8000"
-				use_reservations true
-			}`,
-			false,
-		},
-		{
-			`kea {
-				control_agent "https://kea.example.com:8000"
-				extract_hostname true
+				control_agent_reservations true
 			}`,
 			false,
 		},
@@ -79,7 +84,14 @@ func TestSetup(t *testing.T) {
 		{
 			`kea {
 				control_agent "https://kea.example.com:8000"
-				use_reservations
+				extract_hostname true
+			}`,
+			false,
+		},
+		{
+			`kea {
+				control_agent "https://kea.example.com:8000"
+				control_agent_reservations
 			}`,
 			true,
 		},
@@ -136,6 +148,41 @@ func TestSetup(t *testing.T) {
 				control_agent "https://kea.example.com:8000"
 				use_ipv4 false
 				use_ipv6 false
+			}`,
+			true,
+		},
+		{
+			`kea {
+				dhcp4_conf "/etc/kea/kea-dhcp4.conf"
+				use_ipv4 false
+			}`,
+			true,
+		},
+		{
+			`kea {
+				dhcp6_conf "/etc/kea/kea-dhcp6.conf"
+				use_ipv6 false
+			}`,
+			true,
+		},
+		{
+			`kea {
+				dhcp4_conf "/etc/kea/kea-dhcp4.conf"
+				use_reservations false
+			}`,
+			true,
+		},
+		{
+			`kea {
+				dhcp6_conf "/etc/kea/kea-dhcp6.conf"
+				use_reservations false
+			}`,
+			true,
+		},
+		{
+			`kea {
+				dhcp6_conf "/etc/kea/kea-dhcp6.conf"
+				use_leases true
 			}`,
 			true,
 		},

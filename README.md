@@ -6,13 +6,20 @@
 
 ## Description
 
-This plugin will contact a Kea Control Agent to request IP addresses for a given hostname.
-It supports lease and reservation lookups, for IPv4 and IPv6 DHCP servers.
+This plugin offers two methods to load hostname/IP data from Kea.
 
-### Note
-Prior to Kea 3.0, the Control Agent hooks enabling reservation lookup were sold separately and not included in the open-source package. This plugin implements reservation lookup based on the documentation but *reservation support has not been tested*.
+| Supports           | Reservations | Leases |
+|--------------------|--------------|--------|
+| Control agent [^1] | ⚠️ [^2]       | ✅      |
+| Configuration file | ✅            | ❌      |
 
-As of Kea 3.0, the Control Agent is deprecated; this plugin should still work, but it has only been tested against Kea 2.6.
+[^1]: The Kea Control Agent has been deprecated in Kea 3.0 in favour of directly contacting the dhcp4 and dhcp6 agents. This plugin doesn't yet support those connections.
+
+[^2]: The Kea Control Agent supports reservation information if it is built with the host control hook. This was a paid add-on before Kea 2.7.7/Kea 3.0. 
+
+### Authentication note
+
+OPNsense doesn't support configuring authentication on its Kea control agent, so neither does this plugin at this time.
 
 ## Compilation
 
@@ -43,14 +50,17 @@ make
 
 ~~~ txt
 kea {
+  # One of the following must be configured.
   control_agent http://localhost:8000
+  dhcp4_conf /etc/kea/kea-dhcp4.conf
+  dhcp6_conf /etc/kea/kea-dhcp6.conf
 
   # Filter IP responses to include only ones in the specified CIDRs.
   # If unspecified, filtering will be disabled.
 	networks 10.0.0.0/16 10.10.0.0/16
 
   # Set to "false" if you have an HTTPS proxy for your control agent
-  # and you want to enforce a secure connection. "true" by default.
+  # and you want to enforce a secure connection. "false" by default.
 	insecure false
   
   # Use extract_hostname to send only the hostname of a domain name query to Kea.
@@ -58,14 +68,15 @@ kea {
   # would send "test" as the hostname to Kea. "false" by default.
 	extract_hostname true
 
-  # You can disable one or the other, but at least one
-  # of lease and reservation lookups must be enabled.
+  # You can disable one or the other, but at least one of lease and reservation lookups 
+  # must be enabled when the control agent is enabled.
   # Both are enabled by default.
-	use_leases true
-	use_reservations false
+	control_agent_leases true
+	control_agent_reservations false
 
   # You can disable one or the other, but at least one of IPv4 and IPv6 support must be enabled.
-  # Both are enabled by default.
+  # Both are enabled by default with the control agent. 
+  # They are automatically enabled as appropriate when dhcp[4,6]_conf are set.
 	use_ipv4 true
 	use_ipv6 true
 }
