@@ -254,6 +254,18 @@ func (k Kea) ControlAgentGetIPsForReservation(deviceName string) (ips []net.IP, 
 	return
 }
 
+func CompareCIDRs(subnet1 string, subnet2 string) bool {
+	_, net1, err := net.ParseCIDR(subnet1)
+	if err != nil {
+		return false
+	}
+	_, net2, err := net.ParseCIDR(subnet2)
+	if err != nil {
+		return false
+	}
+	return net1.String() == net2.String()
+}
+
 func (k Kea) GetIPsForHostname(deviceName string) (ips []net.IP, err error) {
 	if k.ControlAgentLeases == "true" {
 		leases, err := k.ControlAgentGetIPsForLease(deviceName)
@@ -277,7 +289,9 @@ func (k Kea) GetIPsForHostname(deviceName string) (ips []net.IP, err error) {
 
 	if k.DHCP4ConfPath != "" {
 		for _, subnet := range k.DHCP4Conf.Dhcp4.Subnet4 {
-			if slices.IndexFunc(k.Networks, func(n string) bool { return n == subnet.Subnet }) != -1 || len(k.Networks) == 0 {
+			if slices.IndexFunc(k.Networks, func(n string) bool {
+				return CompareCIDRs(n, subnet.Subnet)
+			}) != -1 || len(k.Networks) == 0 {
 				for _, reservation := range subnet.Reservations {
 					if reservation.Hostname == deviceName {
 						ip := net.ParseIP(reservation.IpAddress)
@@ -292,8 +306,9 @@ func (k Kea) GetIPsForHostname(deviceName string) (ips []net.IP, err error) {
 
 	if k.DHCP6ConfPath != "" {
 		for _, subnet := range k.DHCP6Conf.Dhcp6.Subnet6 {
-			if slices.IndexFunc(k.Networks,
-				func(n string) bool { return n == subnet.Subnet }) != -1 || len(k.Networks) == 0 {
+			if slices.IndexFunc(k.Networks, func(n string) bool {
+				return CompareCIDRs(n, subnet.Subnet)
+			}) != -1 || len(k.Networks) == 0 {
 				for _, reservation := range subnet.Reservations {
 					if reservation.Hostname == deviceName {
 						for _, ipString := range reservation.IpAddresses {
