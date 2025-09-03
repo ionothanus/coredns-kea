@@ -97,3 +97,4 @@ This plugin reports readiness to the ready plugin. It will be immediately ready.
 ## Also See
 
 See the [manual](https://coredns.io/manual).
+This plugin was derived from [coredns-proxmox](https://github.com/konairius/coredns-proxmox).
